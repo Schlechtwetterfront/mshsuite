@@ -1,0 +1,9 @@
+
+*.png
+*.msh
+*.log
+clean_pyc_log.bat
+*.ffs_gui
+*.7z
+.ropeproject
+testmodels

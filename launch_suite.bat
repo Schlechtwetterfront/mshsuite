@@ -1,0 +1,2 @@
+python mshsuite.py
+pause
