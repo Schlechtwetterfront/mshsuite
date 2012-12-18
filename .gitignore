@@ -5,5 +5,5 @@
 clean_pyc_log.bat
 *.ffs_gui
 *.7z
-.ropeproject
-testmodels
+/.ropeproject/
+/testmodels/
