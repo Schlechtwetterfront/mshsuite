@@ -10,7 +10,7 @@ import model_dialogs
 import material_dialogs
 import misc_dialogs
 
-SUITE_VER = 0.4
+SUITE_VER = 0.5
 WIDTH_LAUNCH = 200
 HEIGHT_LAUNCH = 50
 WIDTH_MSH = 400
