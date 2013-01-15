@@ -1,8 +1,8 @@
 from PySide.QtGui import QGroupBox, QGridLayout, QGraphicsScene, QGraphicsView, QDialog, \
                         QLineEdit, QLabel, QComboBox, QCheckBox, QHBoxLayout, QVBoxLayout, \
                         QPushButton, QSpinBox, QFileDialog, QBrush, QPen, QColor, QPainter, \
-                        QPixmap, QListWidget, QDoubleSpinBox
-from PySide.QtCore import QSize, Qt, QRectF
+                        QPixmap, QListWidget, QDoubleSpinBox, QListView
+from PySide.QtCore import QSize, Qt, QRectF, QAbstractListModel
 import msh2
 import os
 import shutil
@@ -104,6 +104,22 @@ class ModelDialog(QDialog):
         grplay.addLayout(buttonlay2, 3, 0, 1, 4)
         grp.setLayout(grplay)
 
+        geogrp = QGroupBox('Geometry')
+        geolay = QHBoxLayout()
+
+        self.geometries = QListWidget()
+        self.geometries.addItems(['{0} - {1}'.format(ind, geo.classname) for ind, geo in enumerate(self.mdl.segments)])
+
+        geolay.addStretch()
+        geolay.addWidget(self.geometries)
+
+        edit_geo = QPushButton('Edit')
+        edit_geo.clicked.connect(self.edit_geo)
+
+        geolay.addWidget(edit_geo)
+
+        geogrp.setLayout(geolay)
+
         btns = QHBoxLayout()
 
         save = QPushButton('Save')
@@ -119,12 +135,25 @@ class ModelDialog(QDialog):
 
         mainlay = QVBoxLayout()
         mainlay.addWidget(grp)
+        mainlay.addWidget(geogrp)
         mainlay.addLayout(btns)
 
         self.setLayout(mainlay)
         self.setGeometry(340, 340, 400, 200)
         self.setWindowTitle('MSH Suite - {0}'.format(self.mdl.name))
         self.show()
+
+    def edit_geo(self):
+        ind = self.geometries.currentIndex()
+        item = self.geometries.itemFromIndex(ind)
+        if not item:
+            return
+        geo = item.text().split('-')
+        index = int(geo[0].strip())
+        geo = self.mdl.segments[index]
+        if geo.classname in ('SegmentGeometry', 'ClothGeometry'):
+            gd = GeometryDialog(self, geo)
+
 
     def show_uvs(self):
         di = misc_dialogs.DoubleInt(self.render_uvs, self, 'Width', 'Height', 512, 512)
@@ -276,16 +305,20 @@ class DeformerDialog(QDialog):
 
     def initUI(self):
         mainlay = QVBoxLayout()
-        mainlay.addWidget(QLabel('<b>Deformers</b>'))
+        mainlay.addWidget(QLabel('<b>Deformers ({0})</b>'.format(len(self.mdl.deformers))))
 
         def_list = QListWidget()
-        def_list.addItems(self.mdl.deformers)
+        for index, el in enumerate(self.mdl.deformers):
+            def_list.addItem('{0} - {1}'.format(index, el))
+        #def_list.addItems(self.mdl.deformers)
         mainlay.addWidget(def_list)
+
+        self.def_list = def_list
 
         btns = QHBoxLayout()
         btns.addStretch()
 
-        save = QPushButton('(Save)')
+        save = QPushButton('Save')
         save.clicked.connect(self.save)
         close = QPushButton('Close')
         close.clicked.connect(self.close)
@@ -431,4 +464,204 @@ class CollisionPrimDialog(QDialog):
                                 float(self.controls['height'].text().replace(',', '.')),
                                 float(self.controls['depth'].text().replace(',', '.')))
         self.mdl.collprim = self.controls['collprim'].isChecked()
+        self.close()
+
+
+class VertexModel(QAbstractListModel):
+    def __init__(self, vcoll, parent=None):
+        super(VertexModel, self).__init__(parent)
+        self.vcoll = vcoll
+
+    def rowCount(self, parent):
+        return len(self.vcoll)
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return 'Vertex({0}, {1}, {2})'.format(round(self.vcoll[index.row()].pos[0], 2), round(self.vcoll[index.row()].pos[1], 2), round(self.vcoll[index.row()].pos[2], 2))
+        elif role == Qt.UserRole + 1:
+            return self.vcoll[index.row()]
+
+
+class FaceModel(QAbstractListModel):
+    def __init__(self, fcoll, parent=None):
+        super(FaceModel, self).__init__(parent)
+        self.fcoll = fcoll
+
+    def rowCount(self, parent):
+        return len(self.fcoll)
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return 'Face'
+        elif role == Qt.UserRole + 1:
+            return self.vcoll[index.row()]
+
+
+class GeometryDialog(QDialog):
+    def __init__(self, parent, geo):
+        super(GeometryDialog, self).__init__(parent)
+        self.geo = geo
+        self.vmodel = VertexModel(self.geo.vertices, self)
+        self.fmodel = FaceModel(self.geo.faces, self)
+        self.init_UI()
+
+    def init_UI(self):
+        maingrp = QGroupBox(self.geo.classname)
+        grplay = QGridLayout()
+
+        vertices = QListView()
+        vertices.setModel(self.vmodel)
+        vertices.doubleClicked.connect(self.edit_vertex)
+        self.v = vertices
+
+        faces = QListView()
+        faces.setModel(self.fmodel)
+
+        grplay.addWidget(vertices, 0, 0, 2, 2)
+        grplay.addWidget(faces, 0, 2, 2, 2)
+
+        maingrp.setLayout(grplay)
+
+        mainlay = QHBoxLayout()
+        mainlay.addWidget(maingrp)
+
+        self.setLayout(mainlay)
+        self.setGeometry(340, 340, 400, 500)
+        self.setWindowTitle('MSH Suite - Geometry Editor')
+        self.show()
+
+    def edit_vertex(self):
+        ind = self.v.currentIndex()
+        v = self.vmodel.data(ind, Qt.UserRole + 1)
+        vd = VertexDialog(v, self)
+
+
+class VertexDialog(QDialog):
+    def __init__(self, v, parent=None):
+        super(VertexDialog, self).__init__(parent)
+        self.v = v
+        self.controls = {}
+        self.init_UI()
+
+    def init_UI(self):
+        lay = QGridLayout()
+        lay.addWidget(QLabel('<b>Position</b>'), 0, 0, 1, 4)
+
+        posx = QDoubleSpinBox()
+        posx.setValue(self.v.x)
+        self.controls['posx'] = posx
+
+        posy = QDoubleSpinBox()
+        posy.setValue(self.v.y)
+        self.controls['posy'] = posy
+
+        posz = QDoubleSpinBox()
+        posz.setValue(self.v.z)
+        self.controls['posz'] = posz
+
+        lay.addWidget(posx, 1, 0)
+        lay.addWidget(posy, 1, 1)
+        lay.addWidget(posz, 1, 2)
+
+        lay.addWidget(QLabel('<b>Normal</b>'), 2, 0, 1, 4)
+
+        norx = QDoubleSpinBox()
+        norx.setValue(self.v.nx)
+        self.controls['norx'] = norx
+
+        nory = QDoubleSpinBox()
+        nory.setValue(self.v.ny)
+        self.controls['nory'] = nory
+
+        norz = QDoubleSpinBox()
+        norz.setValue(self.v.nz)
+        self.controls['norz'] = norz
+
+        lay.addWidget(norx, 3, 0)
+        lay.addWidget(nory, 3, 1)
+        lay.addWidget(norz, 3, 2)
+
+        lay.addWidget(QLabel('<b>Texture Coordinates</b>'), 4, 0, 1, 4)
+
+        u = QDoubleSpinBox()
+        u.setValue(self.v.u)
+        self.controls['u'] = u
+
+        v = QDoubleSpinBox()
+        v.setValue(self.v.v)
+        self.controls['v'] = v
+
+        lay.addWidget(u, 5, 0)
+        lay.addWidget(v, 5, 1)
+
+        lay.addWidget(QLabel('<b>Color</b>'), 6, 0, 1, 4)
+
+        red = QSpinBox()
+        red.setMinimum(0)
+        red.setMaximum(255)
+        red.setValue(self.v.color.red)
+        self.controls['red'] = red
+
+        green = QSpinBox()
+        green.setMinimum(0)
+        green.setMaximum(255)
+        green.setValue(self.v.color.green)
+        self.controls['green'] = green
+
+        blue = QSpinBox()
+        blue.setMinimum(0)
+        blue.setMaximum(255)
+        blue.setValue(self.v.color.blue)
+        self.controls['blue'] = blue
+
+        alpha = QSpinBox()
+        alpha.setMinimum(0)
+        alpha.setMaximum(255)
+        alpha.setValue(self.v.color.alpha)
+        self.controls['alpha'] = alpha
+
+        lay.addWidget(red, 7, 0)
+        lay.addWidget(green, 7, 1)
+        lay.addWidget(blue, 7, 2)
+        lay.addWidget(alpha, 7, 3)
+
+        grp = QGroupBox('Vertex')
+        grp.setLayout(lay)
+
+        btns = QVBoxLayout()
+        save = QPushButton('Save')
+        save.clicked.connect(self.save)
+
+        cancel = QPushButton('Cancel')
+        cancel.clicked.connect(self.close)
+
+        btns.addStretch()
+        btns.addWidget(save)
+        btns.addWidget(cancel)
+
+        mainlay = QHBoxLayout()
+        mainlay.addWidget(grp)
+        mainlay.addLayout(btns)
+
+        self.setLayout(mainlay)
+        self.setGeometry(340, 340, 300, 250)
+        self.setWindowTitle('MSH Suite - Vertex Editor')
+        self.show()
+
+    def save(self):
+        self.v.x = self.controls['posx'].value()
+        self.v.y = self.controls['posy'].value()
+        self.v.z = self.controls['posz'].value()
+
+        self.v.nx = self.controls['norx'].value()
+        self.v.ny = self.controls['nory'].value()
+        self.v.nz = self.controls['norz'].value()
+
+        self.v.u = self.controls['u'].value()
+        self.v.v = self.controls['v'].value()
+
+        self.v.color.red = self.controls['red'].value()
+        self.v.color.green = self.controls['green'].value()
+        self.v.color.blue = self.controls['blue'].value()
+        self.v.color.alpha = self.controls['alpha'].value()
         self.close()

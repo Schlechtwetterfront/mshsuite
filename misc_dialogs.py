@@ -203,24 +203,27 @@ class TransformDialog(QDialog):
         # Rotation.
         grplay.addWidget(QLabel('<b>Rotation</b>'), 1, 0)
 
-        rotx = QLineEdit()
+        rotx = QSpinBox()
         rotx.setMinimum(-10000)
         rotx.setMaximum(10000)
-        rotx.setText(str(self.tran.euler_angles()[0]))
+        #rotx.setText(str(self.tran.euler_angles()[0]))
+        traz.setValue(self.tran.euler_angles()[0])
         self.controls['rotx'] = rotx
         grplay.addWidget(rotx, 1, 1)
 
-        roty = QLineEdit()
+        roty = QSpinBox()
         roty.setMinimum(-10000)
         roty.setMaximum(10000)
-        roty.setText(str(self.tran.euler_angles()[1]))
+        #roty.setText(str(self.tran.euler_angles()[1]))
+        traz.setValue(self.tran.euler_angles()[1])
         self.controls['roty'] = roty
         grplay.addWidget(roty, 1, 2)
 
-        rotz = QLineEdit()
+        rotz = QSpinBox()
         rotz.setMinimum(-10000)
         rotz.setMaximum(10000)
-        rotz.setText(str(self.tran.euler_angles()[2]))
+        #rotz.setText(str(self.tran.euler_angles()[2]))
+        traz.setValue(self.tran.euler_angles()[2])
         self.controls['rotz'] = rotz
         grplay.addWidget(rotz, 1, 3)
 
